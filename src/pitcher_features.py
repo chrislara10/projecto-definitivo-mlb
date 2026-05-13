@@ -1,6 +1,3 @@
-import json
-from pathlib import Path
-
 import requests
 import pandas as pd
 import numpy as np
@@ -17,91 +14,13 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
 
-CACHE_DIR = Path("data/cache")
-PITCHER_ID_CACHE_FILE = CACHE_DIR / "pitcher_id_map.json"
-PITCHER_LOG_CACHE_DIR = CACHE_DIR / "pitcher_logs"
-
-
-def _ensure_cache_dirs():
-
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    PITCHER_LOG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _load_pitcher_id_cache():
-
-    _ensure_cache_dirs()
-
-    if not PITCHER_ID_CACHE_FILE.exists():
-
-        return {}
-
-    try:
-
-        return json.loads(PITCHER_ID_CACHE_FILE.read_text(encoding="utf-8"))
-
-    except Exception:
-
-        return {}
-
-
-def _save_pitcher_id_cache(cache):
-
-    _ensure_cache_dirs()
-    PITCHER_ID_CACHE_FILE.write_text(
-        json.dumps(cache, ensure_ascii=False, indent=2),
-        encoding="utf-8"
-    )
-
-
-def _pitcher_log_cache_path(pitcher_id, season):
-
-    _ensure_cache_dirs()
-    return PITCHER_LOG_CACHE_DIR / f"{pitcher_id}_{season}.csv"
-
-
-def _load_pitcher_log_cache(pitcher_id, season):
-
-    path = _pitcher_log_cache_path(pitcher_id, season)
-
-    if not path.exists():
-
-        return None
-
-    try:
-
-        df = pd.read_csv(path)
-
-        if len(df) == 0:
-
-            return pd.DataFrame()
-
-        df["date"] = pd.to_datetime(df["date"])
-
-        return df
-
-    except Exception:
-
-        return None
-
-
-def _save_pitcher_log_cache(pitcher_id, season, logs_df):
-
-    path = _pitcher_log_cache_path(pitcher_id, season)
-    logs_df.to_csv(path, index=False)
-
 # =====================================================
 # SEARCH PITCHER ID
 # =====================================================
 
 def search_pitcher_id(
-    pitcher_name,
-    pitcher_id_cache
+    pitcher_name
 ):
-
-    if pitcher_name in pitcher_id_cache:
-
-        return pitcher_id_cache[pitcher_name]
 
     try:
 
@@ -128,13 +47,9 @@ def search_pitcher_id(
 
         if len(people) == 0:
 
-            pitcher_id_cache[pitcher_name] = None
             return None
 
-        pitcher_id = people[0]["id"]
-        pitcher_id_cache[pitcher_name] = pitcher_id
-
-        return pitcher_id
+        return people[0]["id"]
 
     except:
 
@@ -148,15 +63,6 @@ def download_pitcher_game_logs(
     pitcher_id,
     season
 ):
-
-    cached = _load_pitcher_log_cache(
-        pitcher_id=pitcher_id,
-        season=season
-    )
-
-    if cached is not None:
-
-        return cached
 
     url = (
 
@@ -265,12 +171,6 @@ def download_pitcher_game_logs(
 
         df = df.sort_values(
             "date"
-        )
-
-        _save_pitcher_log_cache(
-            pitcher_id=pitcher_id,
-            season=season,
-            logs_df=df
         )
 
         return df
@@ -465,7 +365,6 @@ def build_pitcher_features(
     )
 
     pitcher_map = {}
-    pitcher_id_cache = _load_pitcher_id_cache()
 
     print(
         "\nSEARCHING PITCHER IDS...\n"
@@ -478,8 +377,7 @@ def build_pitcher_features(
     ):
 
         pitcher_id = search_pitcher_id(
-            pitcher,
-            pitcher_id_cache
+            pitcher
         )
 
         if pitcher_id is not None:
@@ -487,8 +385,6 @@ def build_pitcher_features(
             pitcher_map[
                 pitcher
             ] = pitcher_id
-
-    _save_pitcher_id_cache(pitcher_id_cache)
 
     # =================================================
     # DOWNLOAD LOGS
