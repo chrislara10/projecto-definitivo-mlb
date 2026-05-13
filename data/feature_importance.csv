@@ -1,0 +1,17 @@
+feature,importance
+momentum_edge,0.07446911
+offense_edge_5,0.0714044
+home_pitcher_fip,0.06608101
+pitching_whip_edge,0.06593117
+away_pitcher_whip,0.06591539
+away_pitcher_fip,0.06385655
+away_pitcher_era,0.06356102
+pitching_era_edge,0.06244143
+home_pitcher_era,0.061286233
+pitching_fip_edge,0.06096848
+defense_edge_5,0.05870503
+away_pitcher_k9,0.058540847
+home_pitcher_whip,0.05827712
+home_pitcher_k9,0.05767313
+pitching_k9_edge,0.0560752
+offense_edge_10,0.054813858
