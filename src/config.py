@@ -10,50 +10,30 @@ HEADERS = {
 }
 
 FEATURES = [
-
-    # =====================================
-    # TEAM FEATURES
-    # =====================================
-
     "offense_edge_5",
     "offense_edge_10",
     "defense_edge_5",
     "momentum_edge",
-
-    # =====================================
-    # PITCHER EDGE FEATURES
-    # =====================================
-
     "pitching_era_edge",
     "pitching_whip_edge",
     "pitching_fip_edge",
     "pitching_k9_edge",
-
-    # =====================================
-    # AWAY PITCHER
-    # =====================================
-
     "away_pitcher_era",
     "away_pitcher_whip",
     "away_pitcher_fip",
     "away_pitcher_k9",
-
-    # =====================================
-    # HOME PITCHER
-    # =====================================
-
     "home_pitcher_era",
     "home_pitcher_whip",
     "home_pitcher_fip",
-    "home_pitcher_k9"
+    "home_pitcher_k9",
 ]
-# =====================================
-# PREDICTION THRESHOLD
-# =====================================
 
 PREDICTION_THRESHOLD = 0.54
-# =====================================
-# TARGET COLUMN
-# =====================================
-
 TARGET = "home_win"
+
+# Backtest controls
+BOOKMAKER_MARGIN = 0.04
+MARKET_NOISE_STD = 0.03
+MIN_EDGE = 0.02
+MIN_EV = 0.01
+RANDOM_SEED = 42
