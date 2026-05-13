@@ -1,0 +1,115 @@
+import pandas as pd
+import numpy as np
+import os
+from sklearn.metrics import accuracy_score, roc_auc_score, log_loss
+
+# Importaciones de configuración y módulos locales
+from src.config import START_DATE, END_DATE, FEATURES, TARGET, PREDICTION_THRESHOLD
+from src.modeling import train_model
+from src.data_loader import download_historical_games
+from src.feature_engineering import build_team_game_logs, add_rolling_features, build_model_dataset
+from src.pitcher_features import build_pitcher_features, merge_pitcher_features
+from src.modeling import train_model
+from src.backtest import run_backtest
+
+# =====================================================
+# 1. PREPARACIÓN DEL ENTORNO
+# =====================================================
+os.makedirs("data", exist_ok=True)
+
+print("\n--- INICIANDO PIPELINE DE MLB ---")
+
+# =====================================================
+# 2. ADQUISICIÓN Y LIMPIEZA DE DATOS
+# =====================================================
+print("\n[1/7] Descargando juegos históricos...")
+games_df = download_historical_games(START_DATE, END_DATE)
+games_df["date"] = pd.to_datetime(games_df["date"])
+games_df = games_df.sort_values("date").drop_duplicates(subset=["gamePk"])
+
+games_df.to_csv("data/historical_games.csv", index=False)
+print(f"Total juegos descargados: {len(games_df)}")
+
+# =====================================================
+# 3. INGENIERÍA DE CARACTERÍSTICAS (TEAMS)
+# =====================================================
+print("\n[2/7] Construyendo estadísticas de equipos...")
+team_logs = build_team_game_logs(games_df)
+team_logs = add_rolling_features(team_logs)
+model_df = build_model_dataset(games_df, team_logs)
+
+# =====================================================
+# 4. INGENIERÍA DE CARACTERÍSTICAS (PITCHERS)
+# =====================================================
+print("\n[3/7] Construyendo estadísticas de pitchers...")
+pitcher_features = build_pitcher_features(games_df)
+pitcher_features.to_csv("data/pitcher_features.csv", index=False)
+
+# Unión de datos de pitchers al dataset principal
+model_df = merge_pitcher_features(model_df, pitcher_features)
+
+# Limpieza de valores infinitos y nulos en columnas críticas
+model_df = model_df.replace([np.inf, -np.inf], np.nan)
+required_columns = FEATURES + [TARGET]
+model_df = model_df.dropna(subset=required_columns).copy()
+
+print(f"Dataset final listo con forma: {model_df.shape}")
+
+# =====================================================
+# 5. DIVISIÓN TEMPORAL (EVITAR LEAKAGE)
+# =====================================================
+# Usamos el 80% para entrenar y 20% para test (los juegos más recientes)
+split_index = int(len(model_df) * 0.8)
+train_df = model_df.iloc[:split_index].copy()
+test_df = model_df.iloc[split_index:].copy()
+
+X_train, y_train = train_df[FEATURES], train_df[TARGET]
+X_test, y_test = test_df[FEATURES], test_df[TARGET]
+
+# =====================================================
+# 6. ENTRENAMIENTO DEL MODELO
+# =====================================================
+print("\n[4/7] Entrenando modelo XGBoost...")
+# Nota: Asegúrate de que tu función train_model en src.modeling 
+# esté configurada para manejar estos datos.
+model = train_model(X_train, y_train, FEATURES)
+
+# =====================================================
+# 7. EVALUACIÓN Y PREDICCIONES
+# =====================================================
+print("\n[5/7] Evaluando rendimiento...")
+pred_probs = model.predict_proba(X_test)[:, 1]
+# Threshold de seguridad: solo predecimos victoria local si prob > 52%
+PREDICTION_THRESHOLD = 0.54
+
+preds = (
+    pred_probs > PREDICTION_THRESHOLD
+).astype(int)
+
+print(f"Accuracy: {accuracy_score(y_test, preds):.4f}")
+print(f"ROC AUC:  {roc_auc_score(y_test, pred_probs):.4f}")
+print(f"LogLoss:  {log_loss(y_test, pred_probs):.4f}")
+
+# Guardar importancia de variables
+importance_df = pd.DataFrame({"feature": FEATURES, "importance": model.feature_importances_})
+importance_df.sort_values("importance", ascending=False).to_csv("data/feature_importance.csv", index=False)
+
+# =====================================================
+# 8. BACKTEST Y RESULTADOS DE APUESTAS
+# =====================================================
+print("\n[6/7] Ejecutando Backtest...")
+backtest_df, total_bets, total_profit, roi = run_backtest(test_df, pred_probs)
+
+# Guardar resultados
+backtest_df.to_csv("data/mlb_backtest_results.csv", index=False)
+
+print(f"\nRESULTADOS FINALES:")
+print(f"Total Apuestas: {total_bets}")
+print(f"Ganancia Total: {total_profit:.2f} unidades")
+print(f"ROI:            {roi:.4f}")
+
+if total_bets > 0:
+    win_rate = (backtest_df[backtest_df["bet"] == 1]["home_win"] == 1).mean()
+    print(f"Win Rate:       {win_rate:.4f}")
+
+print("\n[7/7] Proceso completado. Archivos guardados en /data.")
