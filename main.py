@@ -1,10 +1,13 @@
 import pandas as pd
 import numpy as np
 import os
-from sklearn.metrics import accuracy_score, roc_auc_score, log_loss
+from sklearn.metrics import accuracy_score, roc_auc_score, log_loss, brier_score_loss
 
 # Importaciones de configuración y módulos locales
-from src.config import START_DATE, END_DATE, FEATURES, TARGET, PREDICTION_THRESHOLD
+from src.config import (
+    START_DATE, END_DATE, FEATURES, TARGET, PREDICTION_THRESHOLD,
+    MIN_EDGE, MIN_EV, BOOKMAKER_MARGIN, MARKET_NOISE_STD, RANDOM_SEED
+)
 from src.modeling import train_model
 from src.data_loader import download_historical_games
 from src.feature_engineering import build_team_game_logs, add_rolling_features, build_model_dataset
@@ -80,7 +83,6 @@ model = train_model(X_train, y_train, FEATURES)
 print("\n[5/7] Evaluando rendimiento...")
 pred_probs = model.predict_proba(X_test)[:, 1]
 # Threshold de seguridad: solo predecimos victoria local si prob > 52%
-PREDICTION_THRESHOLD = 0.54
 
 preds = (
     pred_probs > PREDICTION_THRESHOLD
@@ -89,6 +91,7 @@ preds = (
 print(f"Accuracy: {accuracy_score(y_test, preds):.4f}")
 print(f"ROC AUC:  {roc_auc_score(y_test, pred_probs):.4f}")
 print(f"LogLoss:  {log_loss(y_test, pred_probs):.4f}")
+print(f"Brier:    {brier_score_loss(y_test, pred_probs):.4f}")
 
 # Guardar importancia de variables
 importance_df = pd.DataFrame({"feature": FEATURES, "importance": model.feature_importances_})
@@ -98,7 +101,15 @@ importance_df.sort_values("importance", ascending=False).to_csv("data/feature_im
 # 8. BACKTEST Y RESULTADOS DE APUESTAS
 # =====================================================
 print("\n[6/7] Ejecutando Backtest...")
-backtest_df, total_bets, total_profit, roi = run_backtest(test_df, pred_probs)
+backtest_df, total_bets, total_profit, roi = run_backtest(
+    test_df,
+    pred_probs,
+    min_edge=MIN_EDGE,
+    min_ev=MIN_EV,
+    margin=BOOKMAKER_MARGIN,
+    noise_std=MARKET_NOISE_STD,
+    random_seed=RANDOM_SEED
+)
 
 # Guardar resultados
 backtest_df.to_csv("data/mlb_backtest_results.csv", index=False)
@@ -109,7 +120,10 @@ print(f"Ganancia Total: {total_profit:.2f} unidades")
 print(f"ROI:            {roi:.4f}")
 
 if total_bets > 0:
-    win_rate = (backtest_df[backtest_df["bet"] == 1]["home_win"] == 1).mean()
+    settled = backtest_df[backtest_df["bet"] == 1]
+    win_rate = (settled["bet_result"] > 0).mean()
+    home_bets = (settled["bet_side"] == "home").mean()
     print(f"Win Rate:       {win_rate:.4f}")
+    print(f"% Bets Home:    {home_bets:.4f}")
 
 print("\n[7/7] Proceso completado. Archivos guardados en /data.")
