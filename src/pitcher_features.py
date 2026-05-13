@@ -61,7 +61,7 @@ def search_pitcher_id(
 
 def download_pitcher_game_logs(
     pitcher_id,
-    season=2025
+    season
 ):
 
     url = (
@@ -182,6 +182,36 @@ def download_pitcher_game_logs(
         )
 
         return pd.DataFrame()
+
+
+
+def download_pitcher_logs_for_seasons(
+    pitcher_id,
+    seasons
+):
+
+    frames = []
+
+    for season in sorted(set(seasons)):
+
+        season_logs = download_pitcher_game_logs(
+            pitcher_id=pitcher_id,
+            season=season
+        )
+
+        if len(season_logs) > 0:
+
+            frames.append(season_logs)
+
+    if len(frames) == 0:
+
+        return pd.DataFrame()
+
+    return (
+        pd.concat(frames, ignore_index=True)
+        .sort_values("date")
+        .drop_duplicates(subset=["date"], keep="last")
+    )
 
 # =====================================================
 # CALCULATE ROLLING METRICS
@@ -361,6 +391,7 @@ def build_pitcher_features(
     # =================================================
 
     pitcher_logs = {}
+    seasons = games_df["date"].dt.year.unique().tolist()
 
     print(
         "\nDOWNLOADING PITCHER LOGS...\n"
@@ -370,8 +401,9 @@ def build_pitcher_features(
         pitcher_map.items()
     ):
 
-        logs = download_pitcher_game_logs(
-            pitcher_id
+        logs = download_pitcher_logs_for_seasons(
+            pitcher_id=pitcher_id,
+            seasons=seasons
         )
 
         if len(logs) > 0:
