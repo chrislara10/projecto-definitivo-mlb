@@ -8,7 +8,6 @@ from src.config import (
     START_DATE, END_DATE, FEATURES, TARGET, PREDICTION_THRESHOLD,
     MIN_EDGE, MIN_EV, BOOKMAKER_MARGIN, MARKET_NOISE_STD, RANDOM_SEED
 )
-from src.modeling import train_model
 from src.data_loader import download_historical_games
 from src.feature_engineering import build_team_game_logs, add_rolling_features, build_model_dataset
 from src.pitcher_features import build_pitcher_features, merge_pitcher_features
@@ -26,7 +25,8 @@ print("\n--- INICIANDO PIPELINE DE MLB ---")
 # 2. ADQUISICIÓN Y LIMPIEZA DE DATOS
 # =====================================================
 print("\n[1/7] Descargando juegos históricos...")
-games_df = download_historical_games(START_DATE, END_DATE)
+end_date = min(pd.Timestamp(END_DATE), pd.Timestamp.utcnow().normalize()).strftime("%Y-%m-%d")
+games_df = download_historical_games(START_DATE, end_date)
 games_df["date"] = pd.to_datetime(games_df["date"])
 games_df = games_df.sort_values("date").drop_duplicates(subset=["gamePk"])
 
