@@ -6,7 +6,7 @@ from sklearn.metrics import accuracy_score, roc_auc_score, log_loss, brier_score
 # Importaciones de configuración y módulos locales
 from src.config import (
     START_DATE, END_DATE, FEATURES, TARGET, PREDICTION_THRESHOLD,
-    MIN_EDGE, MIN_EV, BOOKMAKER_MARGIN, MARKET_NOISE_STD, RANDOM_SEED
+    MIN_EDGE, MIN_EV, BOOKMAKER_MARGIN, MARKET_NOISE_STD, RANDOM_SEED, ODDS_API_KEY
 )
 from src.data_loader import download_historical_games_incremental
 from src.data_loader import download_historical_games
@@ -14,6 +14,8 @@ from src.feature_engineering import build_team_game_logs, add_rolling_features, 
 from src.pitcher_features import build_pitcher_features, merge_pitcher_features
 from src.modeling import train_model
 from src.backtest import run_backtest
+from src.odds_provider import fetch_mlb_h2h_odds
+from src.utils import american_to_probability, calculate_ev
 
 # =====================================================
 # 1. PREPARACIÓN DEL ENTORNO
