@@ -103,6 +103,9 @@ def search_pitcher_id(
 
         return pitcher_id_cache[pitcher_name]
 
+    pitcher_name
+):
+
     try:
 
         url = (
@@ -135,6 +138,9 @@ def search_pitcher_id(
         pitcher_id_cache[pitcher_name] = pitcher_id
 
         return pitcher_id
+            return None
+
+        return people[0]["id"]
 
     except:
 
@@ -480,6 +486,7 @@ def build_pitcher_features(
         pitcher_id = search_pitcher_id(
             pitcher,
             pitcher_id_cache
+            pitcher
         )
 
         if pitcher_id is not None:
