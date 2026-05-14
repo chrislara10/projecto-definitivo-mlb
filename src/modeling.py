@@ -1,5 +1,4 @@
 from xgboost import XGBClassifier
-from sklearn.model_selection import train_test_split
 
 # =====================================================
 # TRAIN MODEL
@@ -21,15 +20,9 @@ def train_model(
     # SPLIT VALIDATION
     # =================================================
 
-    X_train_sub, X_val, y_train_sub, y_val = train_test_split(
-
-        X_train,
-        y_train,
-
-        test_size=0.1,
-
-        shuffle=False
-    )
+    split_idx = int(len(X_train) * 0.9)
+    X_train_sub, X_val = X_train.iloc[:split_idx], X_train.iloc[split_idx:]
+    y_train_sub, y_val = y_train.iloc[:split_idx], y_train.iloc[split_idx:]
 
     # =================================================
     # MODEL
