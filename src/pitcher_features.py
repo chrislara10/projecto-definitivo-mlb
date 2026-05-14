@@ -103,6 +103,9 @@ def search_pitcher_id(
 
         return pitcher_id_cache[pitcher_name]
 
+    pitcher_name
+):
+
     try:
 
         url = (
@@ -135,6 +138,9 @@ def search_pitcher_id(
         pitcher_id_cache[pitcher_name] = pitcher_id
 
         return pitcher_id
+            return None
+
+        return people[0]["id"]
 
     except:
 
@@ -467,29 +473,27 @@ def build_pitcher_features(
     pitcher_map = {}
     pitcher_id_cache = _load_pitcher_id_cache()
 
-    all_pitchers = pitcher_names[
-        "pitcher_name"
-    ].tolist()
-    missing_pitchers = [
-        p for p in all_pitchers
-        if p not in pitcher_id_cache
-    ]
-
     print(
-        f"\nSEARCHING PITCHER IDS... faltantes: {len(missing_pitchers)} de {len(all_pitchers)}\n"
+        "\nSEARCHING PITCHER IDS...\n"
     )
 
-    for pitcher in tqdm(missing_pitchers):
+    for pitcher in tqdm(
+        pitcher_names[
+            "pitcher_name"
+        ].tolist()
+    ):
 
         pitcher_id = search_pitcher_id(
             pitcher,
             pitcher_id_cache
+            pitcher
         )
 
-    for pitcher in all_pitchers:
-        pitcher_id = pitcher_id_cache.get(pitcher)
         if pitcher_id is not None:
-            pitcher_map[pitcher] = pitcher_id
+
+            pitcher_map[
+                pitcher
+            ] = pitcher_id
 
     _save_pitcher_id_cache(pitcher_id_cache)
 
