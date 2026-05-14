@@ -28,17 +28,27 @@ def run_backtest(test_df, pred_probs, min_edge=0.02, min_ev=0.01, margin=0.04, n
     backtest_df["model_probability_home"] = pred_probs
     backtest_df["model_probability_away"] = 1 - backtest_df["model_probability_home"]
 
-    market_home_probability, market_away_probability = build_market_probabilities(
-        model_probabilities=backtest_df["model_probability_home"].values,
-        margin=margin,
-        noise_std=noise_std,
-        random_seed=random_seed,
+    has_real_odds = (
+        "real_market_home_odds" in backtest_df.columns and
+        "real_market_away_odds" in backtest_df.columns and
+        backtest_df["real_market_home_odds"].notna().any() and
+        backtest_df["real_market_away_odds"].notna().any()
     )
 
-    backtest_df["market_home_probability"] = market_home_probability
-    backtest_df["market_away_probability"] = market_away_probability
-    backtest_df["market_home_odds"] = backtest_df["market_home_probability"].apply(probability_to_american)
-    backtest_df["market_away_odds"] = backtest_df["market_away_probability"].apply(probability_to_american)
+    if has_real_odds:
+        backtest_df["market_home_odds"] = backtest_df["real_market_home_odds"]
+        backtest_df["market_away_odds"] = backtest_df["real_market_away_odds"]
+    else:
+        market_home_probability, market_away_probability = build_market_probabilities(
+            model_probabilities=backtest_df["model_probability_home"].values,
+            margin=margin,
+            noise_std=noise_std,
+            random_seed=random_seed,
+        )
+        backtest_df["market_home_probability"] = market_home_probability
+        backtest_df["market_away_probability"] = market_away_probability
+        backtest_df["market_home_odds"] = backtest_df["market_home_probability"].apply(probability_to_american)
+        backtest_df["market_away_odds"] = backtest_df["market_away_probability"].apply(probability_to_american)
 
     backtest_df["implied_home_probability"] = backtest_df["market_home_odds"].apply(american_to_probability)
     backtest_df["implied_away_probability"] = backtest_df["market_away_odds"].apply(american_to_probability)
