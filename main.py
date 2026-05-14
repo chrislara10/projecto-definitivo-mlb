@@ -77,6 +77,27 @@ test_df = model_df.iloc[split_index:].copy()
 X_train, y_train = train_df[FEATURES], train_df[TARGET]
 X_test, y_test = test_df[FEATURES], test_df[TARGET]
 
+# Enriquecer test con odds históricas reales (cache incremental)
+odds_history_df = download_historical_odds_incremental(
+    odds_api_key=ODDS_API_KEY,
+    start_date=START_DATE,
+    end_date=end_date,
+    cache_path="data/odds_history.csv",
+)
+if len(odds_history_df) > 0:
+    test_df["date"] = pd.to_datetime(test_df["date"]).dt.normalize()
+    odds_history_df["date"] = pd.to_datetime(odds_history_df["date"]).dt.normalize()
+    test_df = test_df.merge(
+        odds_history_df.rename(
+            columns={
+                "market_home_odds": "real_market_home_odds",
+                "market_away_odds": "real_market_away_odds",
+            }
+        ),
+        on=["date", "home_team", "away_team"],
+        how="left",
+    )
+
 # =====================================================
 # 6. ENTRENAMIENTO DEL MODELO
 # =====================================================
