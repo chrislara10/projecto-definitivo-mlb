@@ -9,6 +9,7 @@ from src.config import (
     MIN_EDGE, MIN_EV, BOOKMAKER_MARGIN, MARKET_NOISE_STD, RANDOM_SEED
 )
 from src.data_loader import download_historical_games_incremental
+from src.data_loader import download_historical_games
 from src.feature_engineering import build_team_game_logs, add_rolling_features, build_model_dataset
 from src.pitcher_features import build_pitcher_features, merge_pitcher_features
 from src.modeling import train_model
@@ -31,6 +32,7 @@ games_df = download_historical_games_incremental(
     end_date,
     cache_path="data/historical_games.csv"
 )
+games_df = download_historical_games(START_DATE, end_date)
 games_df["date"] = pd.to_datetime(games_df["date"])
 games_df = games_df.sort_values("date").drop_duplicates(subset=["gamePk"])
 
@@ -129,40 +131,5 @@ if total_bets > 0:
     home_bets = (settled["bet_side"] == "home").mean()
     print(f"Win Rate:       {win_rate:.4f}")
     print(f"% Bets Home:    {home_bets:.4f}")
-
-    # ==============================================
-    # 9. APUESTAS DETECTADAS EN LA JORNADA MÁS RECIENTE
-    # ==============================================
-    last_date = pd.to_datetime(backtest_df["date"]).max()
-    today_bets = backtest_df[
-        (backtest_df["bet"] == 1) &
-        (pd.to_datetime(backtest_df["date"]) == last_date)
-    ][[
-        "date",
-        "away_team",
-        "home_team",
-        "bet_side",
-        "model_probability_home",
-        "model_probability_away",
-        "market_home_odds",
-        "market_away_odds",
-        "edge_home",
-        "edge_away",
-        "ev_home",
-        "ev_away",
-    ]].copy()
-
-    today_bets = today_bets.sort_values(
-        by=["ev_home", "ev_away"],
-        ascending=False
-    )
-    today_bets.to_csv("data/today_bets.csv", index=False)
-
-    print(f"\nApuestas detectadas en la jornada más reciente ({last_date.date()}): {len(today_bets)}")
-    if len(today_bets) > 0:
-        print(today_bets.to_string(index=False))
-    else:
-        print("No se detectaron apuestas para la jornada más reciente.")
-    print("Archivo generado: data/today_bets.csv")
 
 print("\n[7/7] Proceso completado. Archivos guardados en /data.")
