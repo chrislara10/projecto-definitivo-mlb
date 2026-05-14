@@ -156,27 +156,27 @@ def download_historical_games_incremental(
 
             existing_df = pd.DataFrame()
 
-    all_dates = set(
-        daterange(
-            start_date,
-            end_date
-        )
-    )
-
-    existing_dates = set()
+    missing_dates = []
 
     if len(existing_df) > 0 and "date" in existing_df.columns:
 
-        existing_dates = set(
-            pd.to_datetime(existing_df["date"])
-            .dt.strftime("%Y-%m-%d")
-            .unique()
-            .tolist()
-        )
+        existing_df["date"] = pd.to_datetime(existing_df["date"], errors="coerce")
+        last_cached_date = existing_df["date"].dropna().max()
 
-    missing_dates = sorted(
-        all_dates - existing_dates
-    )
+        if pd.notna(last_cached_date):
+
+            next_date = (last_cached_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+            print(f"\nÚltima fecha en cache: {last_cached_date.strftime('%Y-%m-%d')}")
+            missing_dates = list(daterange(next_date, end_date))
+
+    if len(missing_dates) == 0:
+
+        missing_dates = list(
+            daterange(
+                start_date,
+                end_date
+            )
+        ) if len(existing_df) == 0 else []
 
     if len(missing_dates) == 0:
 
