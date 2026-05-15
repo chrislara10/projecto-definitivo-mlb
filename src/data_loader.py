@@ -161,22 +161,34 @@ def download_historical_games_incremental(
     if len(existing_df) > 0 and "date" in existing_df.columns:
 
         existing_df["date"] = pd.to_datetime(existing_df["date"], errors="coerce")
-        last_cached_date = existing_df["date"].dropna().max()
+        existing_df = existing_df.dropna(subset=["date"]).copy()
+        existing_df["date"] = existing_df["date"].dt.strftime("%Y-%m-%d")
 
-        if pd.notna(last_cached_date):
+        cached_dates = set(existing_df["date"].unique().tolist())
+        requested_dates = list(daterange(start_date, end_date))
 
-            next_date = (last_cached_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-            print(f"\nÚltima fecha en cache: {last_cached_date.strftime('%Y-%m-%d')}")
-            missing_dates = list(daterange(next_date, end_date))
+        missing_dates = [
+            date for date in requested_dates
+            if date not in cached_dates
+        ]
 
-    if len(missing_dates) == 0:
+        if len(missing_dates) == 0:
+            min_cached = min(cached_dates)
+            max_cached = max(cached_dates)
+            print(
+                f"\nCache histórico completo para rango solicitado "
+                f"({start_date} → {end_date})."
+            )
+            print(f"Rango encontrado en cache: {min_cached} → {max_cached}")
+
+    if len(missing_dates) == 0 and len(existing_df) == 0:
 
         missing_dates = list(
             daterange(
                 start_date,
                 end_date
             )
-        ) if len(existing_df) == 0 else []
+        )
 
     if len(missing_dates) == 0:
 
@@ -290,7 +302,14 @@ def download_historical_games_incremental(
 
         return existing_df
 
-    return pd.concat(
+    combined_df = pd.concat(
         [existing_df, new_df],
         ignore_index=True
     )
+    combined_df["date"] = pd.to_datetime(combined_df["date"], errors="coerce")
+    combined_df = combined_df.dropna(subset=["date"])
+    combined_df = combined_df.sort_values("date")
+    combined_df = combined_df.drop_duplicates(subset=["gamePk"], keep="last")
+    combined_df["date"] = combined_df["date"].dt.strftime("%Y-%m-%d")
+
+    return combined_df
