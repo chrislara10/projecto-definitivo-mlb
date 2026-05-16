@@ -9,7 +9,6 @@ from src.config import (
     MIN_EDGE, MIN_EV, BOOKMAKER_MARGIN, MARKET_NOISE_STD, RANDOM_SEED, ODDS_API_KEY
 )
 from src.data_loader import download_historical_games_incremental
-from src.data_loader import download_historical_games
 from src.feature_engineering import build_team_game_logs, add_rolling_features, build_model_dataset
 from src.pitcher_features import build_pitcher_features, merge_pitcher_features
 from src.modeling import train_model
@@ -34,7 +33,6 @@ games_df = download_historical_games_incremental(
     end_date,
     cache_path="data/historical_games.csv"
 )
-games_df = download_historical_games(START_DATE, end_date)
 games_df["date"] = pd.to_datetime(games_df["date"])
 games_df = games_df.sort_values("date").drop_duplicates(subset=["gamePk"])
 
