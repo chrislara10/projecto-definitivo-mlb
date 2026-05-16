@@ -168,12 +168,15 @@ def download_historical_games_incremental(
             existing_df = pd.DataFrame()
 
     missing_dates = []
-    requested_dates = list(daterange(start_date, end_date))
 
     if len(existing_df) > 0 and "date" in existing_df.columns:
-        existing_df = sanitize_games_df(existing_df)
+
+        existing_df["date"] = pd.to_datetime(existing_df["date"], errors="coerce")
+        existing_df = existing_df.dropna(subset=["date"]).copy()
+        existing_df["date"] = existing_df["date"].dt.strftime("%Y-%m-%d")
 
         cached_dates = set(existing_df["date"].unique().tolist())
+        requested_dates = list(daterange(start_date, end_date))
 
         missing_dates = [
             date for date in requested_dates
@@ -189,8 +192,14 @@ def download_historical_games_incremental(
             )
             print(f"Rango encontrado en cache: {min_cached} → {max_cached}")
 
-    if len(existing_df) == 0 or "date" not in existing_df.columns:
-        missing_dates = requested_dates
+    if len(missing_dates) == 0 and len(existing_df) == 0:
+
+        missing_dates = list(
+            daterange(
+                start_date,
+                end_date
+            )
+        )
 
     if len(missing_dates) == 0:
 
@@ -298,14 +307,20 @@ def download_historical_games_incremental(
 
     if len(existing_df) == 0:
 
-        return sanitize_games_df(new_df)
+        return new_df
 
     if len(new_df) == 0:
 
-        return sanitize_games_df(existing_df)
+        return existing_df
 
     combined_df = pd.concat(
         [existing_df, new_df],
         ignore_index=True
     )
-    return sanitize_games_df(combined_df)
+    combined_df["date"] = pd.to_datetime(combined_df["date"], errors="coerce")
+    combined_df = combined_df.dropna(subset=["date"])
+    combined_df = combined_df.sort_values("date")
+    combined_df = combined_df.drop_duplicates(subset=["gamePk"], keep="last")
+    combined_df["date"] = combined_df["date"].dt.strftime("%Y-%m-%d")
+
+    return combined_df
