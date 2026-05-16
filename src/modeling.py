@@ -59,7 +59,7 @@ def train_model(
         y_train_sub,
 
         eval_set=[(X_val, y_val)],
-
+        early_stopping_rounds=40,
         verbose=False
     )
 

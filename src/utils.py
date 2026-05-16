@@ -97,3 +97,26 @@ def calculate_ev(
     )
 
     return ev
+
+
+def kelly_fraction(
+    win_probability,
+    american_odds
+):
+
+    if american_odds == 0:
+
+        return 0.0
+
+    if american_odds > 0:
+
+        b = american_odds / 100
+
+    else:
+
+        b = 100 / abs(american_odds)
+
+    q = 1 - win_probability
+    raw_kelly = ((b * win_probability) - q) / b
+
+    return float(max(0.0, raw_kelly))
