@@ -135,12 +135,12 @@ if total_bets > 0:
     print(f"Win Rate:       {win_rate:.4f}")
     print(f"% Bets Home:    {home_bets:.4f}")
 
-print("\n[7/8] Proceso base completado. Archivos guardados en /data.")
+print("\n[7/7] Proceso completado. Archivos guardados en /data.")
 
 # =====================================================
 # 9. APUESTAS DEL DÍA (PAPER TRACKING + KELLY)
 # =====================================================
-print("\n[8/8] Generando apuestas del día (paper trading)...")
+print("\n[EXTRA] Generando apuestas del día (paper trading)...")
 
 today_utc = pd.Timestamp.utcnow().normalize()
 live_odds_df = fetch_mlb_h2h_odds(ODDS_API_KEY)
