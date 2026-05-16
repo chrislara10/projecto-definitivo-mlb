@@ -142,6 +142,17 @@ def download_historical_games_incremental(
     end_date,
     cache_path="data/historical_games.csv"
 ):
+    def sanitize_games_df(df):
+        if len(df) == 0:
+            return df
+
+        clean_df = df.copy()
+        clean_df["date"] = pd.to_datetime(clean_df["date"], errors="coerce")
+        clean_df = clean_df.dropna(subset=["date"])
+        clean_df = clean_df.sort_values("date")
+        clean_df = clean_df.drop_duplicates(subset=["gamePk"], keep="last")
+        clean_df["date"] = clean_df["date"].dt.strftime("%Y-%m-%d")
+        return clean_df
 
     cache_file = Path(cache_path)
     existing_df = pd.DataFrame()
@@ -156,8 +167,7 @@ def download_historical_games_incremental(
 
             existing_df = pd.DataFrame()
 
-    requested_dates = list(daterange(start_date, end_date))
-    missing_dates = requested_dates.copy()
+    missing_dates = []
 
     if len(existing_df) > 0 and "date" in existing_df.columns:
 
@@ -166,6 +176,8 @@ def download_historical_games_incremental(
         existing_df["date"] = existing_df["date"].dt.strftime("%Y-%m-%d")
 
         cached_dates = set(existing_df["date"].unique().tolist())
+        requested_dates = list(daterange(start_date, end_date))
+
         missing_dates = [
             date for date in requested_dates
             if date not in cached_dates
@@ -180,11 +192,20 @@ def download_historical_games_incremental(
             )
             print(f"Rango encontrado en cache: {min_cached} → {max_cached}")
 
+    if len(missing_dates) == 0 and len(existing_df) == 0:
+
+        missing_dates = list(
+            daterange(
+                start_date,
+                end_date
+            )
+        )
+
     if len(missing_dates) == 0:
 
         print("\nNo hay fechas faltantes. Reutilizando cache de juegos históricos.\n")
 
-        return existing_df
+        return sanitize_games_df(existing_df)
 
     print(
         f"\nDescargando solo fechas faltantes: {len(missing_dates)} días.\n"
@@ -284,7 +305,18 @@ def download_historical_games_incremental(
 
     new_df = pd.DataFrame(new_rows)
 
-    combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+    if len(existing_df) == 0:
+
+        return new_df
+
+    if len(new_df) == 0:
+
+        return existing_df
+
+    combined_df = pd.concat(
+        [existing_df, new_df],
+        ignore_index=True
+    )
     combined_df["date"] = pd.to_datetime(combined_df["date"], errors="coerce")
     combined_df = combined_df.dropna(subset=["date"])
     combined_df = combined_df.sort_values("date")
