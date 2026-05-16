@@ -1,86 +1,69 @@
+from __future__ import annotations
+
 import numpy as np
+import pandas as pd
 
-from src.utils import american_to_probability, calculate_ev
-
-
-def probability_to_american(probability):
-    probability = float(np.clip(probability, 1e-6, 1 - 1e-6))
-
-    if probability >= 0.5:
-        return int(round(-(100 * probability) / (1 - probability)))
-
-    return int(round((100 * (1 - probability)) / probability))
+from src.config import MIN_EDGE, RANDOM_SEED
+from src.utils import (
+    american_profit_multiplier,
+    american_to_probability,
+    calculate_ev,
+)
 
 
-def build_market_probabilities(model_probabilities, margin=0.04, noise_std=0.03, random_seed=42):
-    rng = np.random.default_rng(random_seed)
-    noise = rng.normal(loc=0.0, scale=noise_std, size=len(model_probabilities))
+# =====================================================
+# RUN BACKTEST
+# =====================================================
 
-    fair_probability = np.clip(model_probabilities + noise, 0.05, 0.95)
-    market_home_probability = np.clip(fair_probability * (1 + margin), 0.05, 0.98)
-    market_away_probability = np.clip((1 - fair_probability) * (1 + margin), 0.05, 0.98)
+def run_backtest(
+    test_df: pd.DataFrame,
+    pred_probs,
+    market_odds=None,
+    min_edge: float = MIN_EDGE,
+):
+    """
+    Vectorized backtest.
 
-    return market_home_probability, market_away_probability
+    market_odds can be passed as a Series/array if you have real odds.
+    If omitted, synthetic odds are generated only for testing the pipeline.
+    """
+    backtest_df = test_df.copy().reset_index(drop=True)
+    pred_probs = np.asarray(pred_probs, dtype=float)
 
+    if len(backtest_df) != len(pred_probs):
+        raise ValueError("test_df and pred_probs must have the same length")
 
-def run_backtest(test_df, pred_probs, min_edge=0.02, min_ev=0.01, margin=0.04, noise_std=0.03, random_seed=42):
-    backtest_df = test_df.copy()
-    backtest_df["model_probability_home"] = pred_probs
-    backtest_df["model_probability_away"] = 1 - backtest_df["model_probability_home"]
+    backtest_df["model_probability"] = pred_probs
 
-    has_real_odds = (
-        "real_market_home_odds" in backtest_df.columns and
-        "real_market_away_odds" in backtest_df.columns and
-        backtest_df["real_market_home_odds"].notna().any() and
-        backtest_df["real_market_away_odds"].notna().any()
-    )
-
-    if has_real_odds:
-        backtest_df["market_home_odds"] = backtest_df["real_market_home_odds"]
-        backtest_df["market_away_odds"] = backtest_df["real_market_away_odds"]
+    if market_odds is None:
+        rng = np.random.default_rng(RANDOM_SEED)
+        possible_odds = np.array(list(range(-200, -101)) + list(range(100, 201)))
+        backtest_df["market_odds"] = rng.choice(possible_odds, size=len(backtest_df))
     else:
-        market_home_probability, market_away_probability = build_market_probabilities(
-            model_probabilities=backtest_df["model_probability_home"].values,
-            margin=margin,
-            noise_std=noise_std,
-            random_seed=random_seed,
-        )
-        backtest_df["market_home_probability"] = market_home_probability
-        backtest_df["market_away_probability"] = market_away_probability
-        backtest_df["market_home_odds"] = backtest_df["market_home_probability"].apply(probability_to_american)
-        backtest_df["market_away_odds"] = backtest_df["market_away_probability"].apply(probability_to_american)
+        if len(market_odds) != len(backtest_df):
+            raise ValueError("market_odds must have the same length as test_df")
+        backtest_df["market_odds"] = np.asarray(market_odds, dtype=float)
 
-    backtest_df["implied_home_probability"] = backtest_df["market_home_odds"].apply(american_to_probability)
-    backtest_df["implied_away_probability"] = backtest_df["market_away_odds"].apply(american_to_probability)
+    odds = backtest_df["market_odds"].to_numpy(dtype=float)
 
-    backtest_df["edge_home"] = backtest_df["model_probability_home"] - backtest_df["implied_home_probability"]
-    backtest_df["edge_away"] = backtest_df["model_probability_away"] - backtest_df["implied_away_probability"]
+    backtest_df["implied_probability"] = american_to_probability(odds)
+    backtest_df["edge"] = backtest_df["model_probability"] - backtest_df["implied_probability"]
+    backtest_df["expected_value"] = calculate_ev(backtest_df["model_probability"], odds)
 
-    backtest_df["ev_home"] = backtest_df.apply(
-        lambda row: calculate_ev(row["model_probability_home"], row["market_home_odds"]),
-        axis=1,
+    backtest_df["bet"] = (
+        (backtest_df["edge"] > min_edge)
+        & (backtest_df["expected_value"] > 0)
+    ).astype(int)
+
+    profit_multiplier = american_profit_multiplier(odds)
+    won = backtest_df["home_win"].to_numpy(dtype=int) == 1
+    bet = backtest_df["bet"].to_numpy(dtype=int) == 1
+
+    backtest_df["bet_result"] = np.where(
+        bet,
+        np.where(won, profit_multiplier, -1.0),
+        0.0,
     )
-    backtest_df["ev_away"] = backtest_df.apply(
-        lambda row: calculate_ev(row["model_probability_away"], row["market_away_odds"]),
-        axis=1,
-    )
-
-    home_candidate = (backtest_df["edge_home"] >= min_edge) & (backtest_df["ev_home"] >= min_ev)
-    away_candidate = (backtest_df["edge_away"] >= min_edge) & (backtest_df["ev_away"] >= min_ev)
-
-    backtest_df["bet_side"] = np.select(
-        [home_candidate & (backtest_df["ev_home"] >= backtest_df["ev_away"]), away_candidate],
-        ["home", "away"],
-        default="none",
-    )
-    backtest_df["bet"] = (backtest_df["bet_side"] != "none").astype(int)
-
-    chosen_odds = np.where(backtest_df["bet_side"] == "home", backtest_df["market_home_odds"], backtest_df["market_away_odds"])
-    home_won = backtest_df["home_win"] == 1
-    bet_won = np.where(backtest_df["bet_side"] == "home", home_won, ~home_won)
-
-    payout = np.where(chosen_odds > 0, chosen_odds / 100, 100 / np.abs(chosen_odds))
-    backtest_df["bet_result"] = np.where(backtest_df["bet"] == 0, 0, np.where(bet_won, payout, -1))
 
     total_bets = int(backtest_df["bet"].sum())
     total_profit = float(backtest_df["bet_result"].sum())
