@@ -2,25 +2,17 @@ import json
 import time
 from pathlib import Path
 
-import requests
 import pandas as pd
-import numpy as np
-
+import requests
 from tqdm import tqdm
 
-# =====================================================
-# MLB API
-# =====================================================
-
 BASE_URL = "https://statsapi.mlb.com/api/v1"
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 CACHE_DIR = Path("data/cache")
 PITCHER_ID_CACHE_FILE = CACHE_DIR / "pitcher_id_map.json"
 PITCHER_LOG_CACHE_DIR = CACHE_DIR / "pitcher_logs"
+CURRENT_SEASON_CACHE_TTL = 86_400
 
 # TTL en segundos para logs de la temporada en curso (24 horas)
 CURRENT_SEASON_CACHE_TTL = 86_400
@@ -43,10 +35,7 @@ def _load_pitcher_id_cache():
 
 def _save_pitcher_id_cache(cache):
     _ensure_cache_dirs()
-    PITCHER_ID_CACHE_FILE.write_text(
-        json.dumps(cache, ensure_ascii=False, indent=2),
-        encoding="utf-8"
-    )
+    PITCHER_ID_CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _pitcher_log_cache_path(pitcher_id, season):
@@ -81,6 +70,10 @@ def _load_pitcher_log_cache(pitcher_id, season):
     if not path.exists():
         return None
 
+def _load_pitcher_log_cache(pitcher_id, season):
+    path = _pitcher_log_cache_path(pitcher_id, season)
+    if not path.exists() or _is_current_season_cache_stale(path, season):
+        return None
     try:
         df = pd.read_csv(path)
         # FIX #5: DataFrame vacío cacheado es válido (pitcher sin stats esa temporada)
@@ -164,7 +157,6 @@ def download_pitcher_game_logs(pitcher_id, season):
 
         splits = stats[0].get("splits", [])
         rows = []
-
         for s in splits:
             stat = s.get("stat", {})
             rows.append({
@@ -178,7 +170,6 @@ def download_pitcher_game_logs(pitcher_id, season):
             })
 
         df = pd.DataFrame(rows)
-
         if len(df) == 0:
             # FIX #5: cachear vacío también aquí
             _save_pitcher_log_cache(pitcher_id, season, df)
@@ -189,7 +180,6 @@ def download_pitcher_game_logs(pitcher_id, season):
 
         _save_pitcher_log_cache(pitcher_id=pitcher_id, season=season, logs_df=df)
         return df
-
     except Exception as e:
         print(f"ERROR pitcher {pitcher_id} season {season}: {e}")
         return pd.DataFrame()
@@ -204,6 +194,7 @@ def download_pitcher_logs_for_seasons(pitcher_id, seasons):
 
     if not frames:
         return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True).sort_values("date").drop_duplicates(subset=["date"], keep="last")
 
     return (
         pd.concat(frames, ignore_index=True)
@@ -279,10 +270,6 @@ def build_pitcher_features(games_df):
             pitcher_map[pitcher] = pitcher_id
 
     _save_pitcher_id_cache(pitcher_id_cache)
-
-    # =================================================
-    # DOWNLOAD LOGS
-    # =================================================
 
     pitcher_logs = {}
     seasons = games_df["date"].dt.year.unique().tolist()
